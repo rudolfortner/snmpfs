@@ -1,3 +1,14 @@
+# Mercurial
+.hg
+.hgignore
+
+# KDevelop
+*.kdev4
+
+# temporary files
+build/
+deps/
+
 # Prerequisites
 *.d
 

@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE snmpfs SYSTEM "../config/snmpfs.dtd">
+
+<snmpfs interval="60">
+	<trap port="16200" version="2c" community="private"/>
+	
+	<device name="virtsnmp20">
+		<snmp peername="192.168.56.220" version="2c" community="public"/>
+		
+		<objects>
+			<scalar name="hostname"			oid="iso.3.6.1.2.1.1.5.0"/>
+			<scalar name="uptime"			oid="iso.3.6.1.2.1.1.3.0" interval="5"/>
+		</objects>		
+	</device>
+
+	
+</snmpfs>

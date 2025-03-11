@@ -1,0 +1,522 @@
+#define FUSE_USE_VERSION 31
+
+#include "configio.h"
+#include "defines.h"
+#include "demo.h"
+#include "deviceinit.h"
+#include "fuse/filenode.h"
+#include "fuse/virtualfile.h"
+#include "fuse/virtuallogger.h"
+#include "proc.h"
+#include "sandbox.h"
+#include "snmpfs.h"
+#include "snmp/device.h"
+#include "snmp/table.h"
+#include "snmp/traphandler.h"
+#include "snmp/trapreceiver.h"
+
+#include <fuse3/fuse.h>
+#include <fuse3/fuse_lowlevel.h>
+
+#include <algorithm>
+#include <assert.h>
+#include <cstddef>
+#include <cstdlib>
+
+#include <errno.h>
+#include <fstream>
+#include <queue>
+#include <stdio.h>
+#include <string>
+#include <string.h>
+#include <syslog.h>
+#include <unistd.h>
+
+namespace snmpfs {
+
+	// TODO Move into filesystem struct which holds all data
+	static std::ofstream logger("log.txt");
+
+#ifdef DEBUG
+	#define LOG(path) printf("%s\t->\t%s\n", __func__, path); logger << __func__ << "\t->\t" << path << std::endl
+	#define LOGD(path, data) printf("%s\t->\t%s\n%s\n", __func__, path, data); logger << __func__ << "\t->\t" << path << std::endl << data << std::endl
+#else
+	#define LOG(path)
+	#define LOGD(path, data)
+#endif
+
+	bool initSNMP(const snmpfsConfig& config)
+	{
+		// INIT SNMP
+		init_snmp("snmpfs");
+
+		// LOAD SYSTEM MIBS
+		if(config.loadSystemMIBs)
+		{
+			read_all_mibs();
+		}
+
+		// LOAD SPECIFIED MIBS
+		std::queue<std::filesystem::path> mibs;
+		for(const std::filesystem::path& mib : config.mibs)
+		{
+			mibs.push(mib);
+		}
+
+		while(!mibs.empty())
+		{
+			// GET NEXT MIB PATH
+			std::filesystem::path mib = mibs.front();
+			mibs.pop();
+
+			// RECURSIVELY ADD ENTRIES OF DIRECTORY
+			if(std::filesystem::is_directory(mib))
+			{
+				for(const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(mib))
+				{
+					mibs.push(entry.path());
+				}
+				continue;
+			}
+
+			// LOAD MIB
+			tree* tree = read_mib(mib.c_str());
+			if(!tree)
+			{
+				printf("Error loading MIB from %s\n", mib.c_str());
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	snmpFS * createFS(const snmpfsConfig& config)
+	{
+		openlog("snmpfs", LOG_PID, 0);
+		syslog(LOG_INFO, "Creating filesystem for %s\n", config.mountPoint.c_str());
+		syslog(LOG_INFO, "Using config from %s\n", config.configPath.c_str());
+
+		snmpFS* snmpfs = new struct snmpFS;
+		snmpfs->taskManager.start();
+
+		// Create root of FS
+		snmpfs->root = new FileNode("/");
+
+		// Create Devices
+		DeviceInitTask* initTask = new DeviceInitTask(snmpfs, config.devices);
+		snmpfs->taskManager.addTask(initTask);
+
+		// Create TrapReceiver
+		if(config.trap.port > 0)
+		{
+			snmpfs->trapReceiver = new TrapReceiver(config.trap.port);
+
+			// TODO Auth Handler
+			AuthTrapHandler* authHandler = new AuthTrapHandler(config.trap.auth);
+			snmpfs->trapReceiver->addHandler(authHandler);
+
+			// TODO Device Handler (what if user does not want to update data?)
+			DeviceTrapHandler* deviceHandler = new DeviceTrapHandler(snmpfs->devices);
+			snmpfs->trapReceiver->addHandler(deviceHandler);
+
+			LogTrapHandler* logHandler = new LogTrapHandler(snmpfs->devices);
+			snmpfs->trapReceiver->addHandler(logHandler);
+		}
+
+		// Create PROCFS
+		snmpfs->proc.snmpfsCreation.setNow();
+		snmpfs->proc.snmpfsPID.set(std::to_string(getpid()));
+		snmpfs->proc.snmpfsUID.set(std::to_string(getuid()));
+		snmpfs->proc.snmpfsGID.set(std::to_string(getgid()));
+		snmpfs->proc.snmpfsVersion.set(VERSION);
+		insertFileNodeByPath("proc", createProcFS(&snmpfs->proc), snmpfs->root);
+
+		return snmpfs;
+	}
+
+	void destroyFS(snmpFS* snmpfs)
+	{
+		// TODO Free devices
+		for(Device* device : snmpfs->devices)
+		{
+			device->freeObjects();
+			device->cleanupSNMP();
+			delete device;
+		}
+		// TODO Free other snmpFS entries
+
+		// TODO Recursively free nodes
+		snmpfs->root->freeChilds();
+		delete snmpfs->root;
+
+		if(snmpfs->trapReceiver)
+		{
+			// TODO Delete handlers
+			delete snmpfs->trapReceiver;
+		}
+
+		snmpfs->taskManager.stop();
+		delete snmpfs;
+
+		closelog();
+	}
+
+
+	#define SNMPFS_OPT(t, p, v) {t, offsetof(struct snmpfsParams, p), v}
+	static struct fuse_opt snmpfs_opts[] = {
+		// SNMPFS_OPT("-n %i",		number,	0),
+		SNMPFS_OPT("-c %s",			configPath,		0),
+
+		FUSE_OPT_KEY("-h",			SNMPFS_OPT_KEY_HELP),
+		FUSE_OPT_KEY("--help",		SNMPFS_OPT_KEY_HELP),
+		FUSE_OPT_KEY("-V",			SNMPFS_OPT_KEY_VERSION),
+		FUSE_OPT_KEY("--version",	SNMPFS_OPT_KEY_VERSION),
+
+		FUSE_OPT_END
+	};
+
+	static int snmpfs_opt_proc(void* data, const char* arg, int key, struct fuse_args* outargs)
+	{
+		switch(key)
+		{
+			case SNMPFS_OPT_KEY_HELP:
+				// TODO Print HELP
+				printf("Printing HELP\n");
+				exit(1);
+
+			case SNMPFS_OPT_KEY_VERSION:
+				// TODO Print VERSION
+				printf("Print VERSION\n");
+				exit(1);
+
+	// 		case FUSE_OPT_KEY_NONOPT:
+	// 			printf("ARGUMENT %s\n", arg);
+	// 			break;
+		}
+		return 1;
+	}
+
+	static void* snmpfs_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
+	{
+		LOG("snmpfs_init");
+		fuse_context* context = fuse_get_context();
+		snmpfsConfig* config = (snmpfsConfig*) context->private_data;
+		assert(config);
+
+		// INIT SNMPFS
+		snmpFS* snmpfs = createFS(*config);
+		return snmpfs;
+	}
+
+	static void snmpfs_destroy(void* data)
+	{
+		LOG("snmpfs_destroy");
+		snmpFS* snmpfs = (snmpFS*) data;
+		destroyFS(snmpfs);
+	}
+
+	static int snmpfs_getattr(const char* path, struct stat* stbuf, struct fuse_file_info *fi)
+	{
+		LOG(path);
+		fuse_context* context = fuse_get_context();
+		snmpFS* snmpfs = (snmpFS*) context->private_data;
+
+		memset(stbuf, 0, sizeof(struct stat));
+
+		// Root
+		if (strcmp(path, "/") == 0)
+		{
+			stbuf->st_mode	= S_IFDIR | 0755;
+			stbuf->st_nlink	= 2;
+			stbuf->st_size	= 0;
+			return 0;
+		}
+
+		// File
+		snmpfs->mutex.lock();
+		FileNode* node = getFileNodeByPath(std::filesystem::path(path), snmpfs->root);
+		snmpfs->mutex.unlock();
+		if(!node) return -ENOENT;
+
+		// TODO Maybe also move to FileNode ?
+		stbuf->st_uid = getuid();
+		stbuf->st_gid = getgid();
+
+		stbuf->st_mode	= node->getMode();
+		stbuf->st_nlink	= node->getLinkCount();
+		stbuf->st_size	= node->getSize();
+
+		stbuf->st_atim	= node->getTimeAccess();
+		stbuf->st_mtim	= node->getTimeModification();
+		stbuf->st_ctim	= node->getTimeStatusChange();
+		// TODO Creation Time
+
+		return 0;
+	}
+
+	static int snmpfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi, enum fuse_readdir_flags)
+	{
+		LOG(path);
+		fuse_context* context = fuse_get_context();
+		snmpFS* snmpfs = (snmpFS*) context->private_data;
+
+		(void) offset;
+		(void) fi;
+
+		filler(buf, ".", NULL, 0, 0);
+		filler(buf, "..", NULL, 0, 0);
+
+		snmpfs->mutex.lock();
+		FileNode* dirNode = getFileNodeByPath(std::filesystem::path(path), snmpfs->root);
+		snmpfs->mutex.unlock();
+		if(dirNode == NULL) return -ENOENT;
+
+		for(FileNode* fileNode : dirNode->children)
+		{
+			filler(buf, fileNode->name.c_str(), NULL, 0, 0);
+		}
+
+		return 0;
+	}
+
+	static int snmpfs_open(const char* path, struct fuse_file_info* fi)
+	{
+		LOG(path);
+		fuse_context* context = fuse_get_context();
+		snmpFS* snmpfs = (snmpFS*) context->private_data;
+
+		snmpfs->mutex.lock();
+		FileNode* node = getFileNodeByPath(std::filesystem::path(path), snmpfs->root);
+		snmpfs->mutex.unlock();
+		if(node)
+			return node->open();
+
+		return 0;
+	}
+
+	static int snmpfs_read(const char* path, char* buf, size_t size, off_t offset, struct fuse_file_info* fi)
+	{
+		LOGD(path, buf);
+		fuse_context* context = fuse_get_context();
+		snmpFS* snmpfs = (snmpFS*) context->private_data;
+
+		snmpfs->mutex.lock();
+		FileNode* node = getFileNodeByPath(std::filesystem::path(path), snmpfs->root);
+		snmpfs->mutex.unlock();
+		if(node)
+			return node->read(buf, size, offset);
+
+		return -ENOENT;
+	}
+
+	static int snmpfs_write(const char* path, const char* buf, size_t size, off_t offset, struct fuse_file_info* fi)
+	{
+		LOGD(path, buf);
+		fuse_context* context = fuse_get_context();
+		snmpFS* snmpfs = (snmpFS*) context->private_data;
+
+		snmpfs->mutex.lock();
+		FileNode* node = getFileNodeByPath(std::filesystem::path(path), snmpfs->root);
+		snmpfs->mutex.unlock();
+		if(node)
+			return node->write(buf, size, offset);
+
+		return -ENOENT;
+	}
+
+	static int snmpfs_flush(const char* path, struct fuse_file_info* fi)
+	{
+		LOG(path);
+		fuse_context* context = fuse_get_context();
+		snmpFS* snmpfs = (snmpFS*) context->private_data;
+
+		snmpfs->mutex.lock();
+		FileNode* node = getFileNodeByPath(std::filesystem::path(path), snmpfs->root);
+		snmpfs->mutex.unlock();
+		if(node)
+			return node->flush();
+
+		return 0;
+	}
+
+	static int snmpfs_release(const char* path, struct fuse_file_info* fi)
+	{
+		LOG(path);
+		fuse_context* context = fuse_get_context();
+		snmpFS* snmpfs = (snmpFS*) context->private_data;
+
+		snmpfs->mutex.lock();
+		FileNode* node = getFileNodeByPath(std::filesystem::path(path), snmpfs->root);
+		snmpfs->mutex.unlock();
+		if(node)
+			return node->release();
+
+		return 0;
+	}
+
+	static int snmpfs_truncate(const char* path, off_t offset, struct fuse_file_info* fi)
+	{
+		LOG(path);
+		fuse_context* context = fuse_get_context();
+		snmpFS* snmpfs = (snmpFS*) context->private_data;
+
+		snmpfs->mutex.lock();
+		FileNode* node = getFileNodeByPath(std::filesystem::path(path), snmpfs->root);
+		snmpfs->mutex.unlock();
+		if(node)
+			return node->truncate(offset);
+
+		return -ENOENT;
+	}
+
+
+	static struct fuse_operations fuse_ops = {
+		.getattr	= snmpfs_getattr,
+		.truncate	= snmpfs_truncate,
+		.open		= snmpfs_open,
+		.read		= snmpfs_read,
+		.write		= snmpfs_write,
+		.flush		= snmpfs_flush,
+		.release	= snmpfs_release,
+		.readdir	= snmpfs_readdir,
+		.init		= snmpfs_init,
+		.destroy	= snmpfs_destroy
+	};
+
+}	// namespace snmpfs
+
+
+
+using namespace snmpfs;
+
+int main(int argc, char **argv)
+{
+	test_timedqueue();
+	return 0;
+
+	// Parse command line arguments
+	snmpfsParams params;
+	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+	// Let the Kernel handle the file permissions for us (according to mode/permission flags)
+	int code = fuse_opt_parse(&args, &params, snmpfs_opts, snmpfs_opt_proc);
+
+	if(code != 0)
+	{
+		printf("There was an error running fuse_opt_parse\n");
+		return EXIT_FAILURE;
+	}
+
+	if(!params.configPath)
+	{
+		printf("No configuration file specified!\n");
+		return EXIT_FAILURE;
+	}
+
+	// Parse command line options for FUSE
+	fuse_cmdline_opts opts;
+	if(fuse_parse_cmdline(&args, &opts) != 0)
+	{
+		printf("fuse_parse_cmdline returned with error\n");
+		return EXIT_FAILURE;
+	}
+
+	if(opts.show_help)
+	{
+		printf("SHOW HELP\n");
+		return EXIT_SUCCESS;
+	}
+	else if(opts.show_version)
+	{
+		printf("SHOW VERSION\n");
+		return EXIT_SUCCESS;
+	}
+
+	if(opts.mountpoint == nullptr)
+	{
+		printf("No mountpoint specified!\n");
+		return EXIT_FAILURE;
+	}
+
+	// Check and load configuration
+	std::filesystem::path relative = params.configPath;
+	std::filesystem::path currentD = std::filesystem::current_path();
+	std::filesystem::path path		= currentD / relative;
+
+	snmpfsConfig config;
+	bool valid = ConfigIO::read(path, config);
+	if(!valid)
+	{
+		printf("Invalid Configuration!\n");
+		return EXIT_FAILURE;
+	}
+	config.mountPoint = opts.mountpoint;
+
+
+	// Load snmp related stuff
+	bool suc = initSNMP(config);
+	if(!suc)
+	{
+		printf("Invalid Configuration!\n");
+		return EXIT_FAILURE;
+	}
+
+
+	// START FUSE DAEMON (lazy equivalent would be to use fuse_main)
+	assert(fuse_opt_add_arg(&args, "-o") == 0);
+	assert(fuse_opt_add_arg(&args, "default_permissions") == 0);
+	fuse* fuse = fuse_new(&args, &fuse_ops, sizeof(fuse_ops), &config);
+
+	if(!fuse)
+	{
+		printf("Error creating a FUSE instance\n");
+		return EXIT_FAILURE;
+	}
+
+	if(fuse_mount(fuse, opts.mountpoint) != 0)
+	{
+		printf("Error mounting fuse at %s\n", opts.mountpoint);
+		return EXIT_FAILURE;
+	}
+
+	if(fuse_daemonize(opts.foreground) != 0)
+	{
+		printf("Error daemonizing fuse\n");
+		return EXIT_FAILURE;
+	}
+
+	struct fuse_session* fs = fuse_get_session(fuse);
+	if(fuse_set_signal_handlers(fs) != 0)
+	{
+		printf("Error setting signal handlers\n");
+		return EXIT_FAILURE;
+	}
+
+	// BLOCK UNTIL CTRL+C or fusermount -u
+	int ret;
+	if(opts.singlethread)
+	{
+		ret = fuse_loop(fuse);
+	}
+	else
+	{
+		fuse_loop_config* cfg = fuse_loop_cfg_create();
+
+		if(!cfg)
+		{
+			printf("RRR\n");
+			return EXIT_FAILURE;
+		}
+
+		fuse_loop_cfg_set_clone_fd(cfg, opts.clone_fd);
+		fuse_loop_cfg_set_idle_threads(cfg, opts.max_idle_threads);
+		fuse_loop_cfg_set_max_threads(cfg, opts.max_threads);
+		ret = fuse_loop_mt(fuse, cfg);
+		fuse_loop_cfg_destroy(cfg);
+	}
+
+	fuse_remove_signal_handlers(fs);
+	fuse_unmount(fuse);
+	fuse_destroy(fuse);
+	return ret ? 1 : 0;
+}

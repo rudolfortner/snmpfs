@@ -1,0 +1,97 @@
+<!ELEMENT snmpfs ((device | mibs | template | trap)*)>
+<!ATTLIST snmpfs
+          interval CDATA #IMPLIED>
+
+
+<!-- DEVICE -->
+<!ELEMENT device (snmp?, objects?)>
+<!ATTLIST device
+          name CDATA #REQUIRED
+          interval  CDATA "60" >
+
+
+<!-- MIBS -->
+<!ELEMENT mibs (mib*)>
+<!ATTLIST mibs
+          system CDATA #IMPLIED > 
+<!ELEMENT mib EMPTY>
+<!ATTLIST mib
+          path CDATA #REQUIRED>    
+
+
+<!-- TEMPLATE -->
+<!ELEMENT template ((scalar | table | tree)*)>
+<!ATTLIST template
+          name CDATA #REQUIRED
+          interval CDATA #IMPLIED
+          >
+
+
+<!-- TRAP -->
+<!ELEMENT trap EMPTY>
+<!ATTLIST trap
+          port				CDATA #REQUIRED
+          version			CDATA #REQUIRED
+          community			CDATA #IMPLIED
+          username			CDATA #IMPLIED
+          securityLevel		CDATA #IMPLIED
+          authAlgorithm		CDATA #IMPLIED
+          authPassphrase	CDATA #IMPLIED
+          privAlgorithm		CDATA #IMPLIED
+          privPassphrase	CDATA #IMPLIED
+          >
+
+
+<!-- SNMP -->
+<!ELEMENT snmp EMPTY>
+<!ATTLIST snmp
+          peername			CDATA #REQUIRED
+          version			CDATA #REQUIRED
+          community			CDATA #IMPLIED
+          username			CDATA #IMPLIED
+          securityLevel		CDATA #IMPLIED
+          authAlgorithm		CDATA #IMPLIED
+          authPassphrase	CDATA #IMPLIED
+          privAlgorithm		CDATA #IMPLIED
+          privPassphrase	CDATA #IMPLIED
+          >
+
+
+<!-- OBJECTS -->
+<!ELEMENT objects ((scalar | table | tree | reuse)*)>
+<!ELEMENT scalar EMPTY>
+<!ATTLIST scalar
+          name		CDATA	#REQUIRED
+          oid		CDATA	#REQUIRED
+          interval	CDATA	#IMPLIED
+          >
+
+<!ELEMENT table (column*)>
+<!ATTLIST table
+          name		CDATA	#REQUIRED
+          oid		CDATA	#REQUIRED
+          interval	CDATA	#IMPLIED
+          >
+
+<!-- interval for column currently unused! -->
+<!ELEMENT column EMPTY>
+<!ATTLIST column
+          name		CDATA	#REQUIRED
+          oid		CDATA	#REQUIRED
+          >
+
+<!ELEMENT tree EMPTY>
+<!ATTLIST tree
+          name		CDATA	#REQUIRED
+          oid		CDATA	#REQUIRED
+          interval	CDATA	#IMPLIED
+          placeholder	CDATA	#IMPLIED
+          >
+
+<!ELEMENT reuse EMPTY>
+<!ATTLIST reuse
+          name		CDATA	#REQUIRED
+          interval	CDATA	#IMPLIED
+          prefix	CDATA	#IMPLIED
+          >
+

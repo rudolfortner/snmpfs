@@ -1,0 +1,260 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE snmpfs SYSTEM "../config/snmpfs.dtd">
+
+<snmpfs interval="666">
+	<trap port="16200" version="2c" community="private"/>
+				
+	<mibs>
+		<!--<mib path="/var/lib/mibs"/>-->
+		<mib path="/var/lib/mibs/ietf/SNMPv2-MIB"/>
+	</mibs>
+	
+	<template name="demo" interval="10">
+		
+		<scalar name="hostname"		oid="iso.3.6.1.2.1.1.5.0"/>
+		<scalar name="uptime"		oid="iso.3.6.1.2.1.1.3.0" interval="5"/>
+		<scalar name="oid-example"	oid="iso.3.6.1.2.1.1.2.0"/>
+		<scalar name="hex-string"	oid="iso.3.6.1.2.1.25.1.2.0"/>
+		<scalar name="integer"		oid="iso.3.6.1.2.1.25.1.3.0"/>
+		<scalar name="gauge"		oid="iso.3.6.1.2.1.25.1.5.0"/>
+		
+		<table name="atTable"		oid="iso.3.6.1.2.1.3.1" interval="10"/>
+		<table name="interfaces"	oid="iso.3.6.1.2.1.2.2"/>
+		<tree  name="system"		oid="iso.3.6.1.2.1.1"/>
+		
+		<table name="ipv6IfaceTab"	oid="iso.3.6.1.2.1.4.30"/>
+		<tree name="ip"				oid="iso.3.6.1.2.1.4"/>
+	</template>
+	
+	<template name="small">
+		<scalar name="hostname"		oid="iso.3.6.1.2.1.1.5.0" interval="30"/>
+		<scalar name="uptime"		oid="iso.3.6.1.2.1.1.3.0" interval="30"/>
+		<tree  name="system"		oid="iso.3.6.1.2.1.1"/>
+	</template>
+	
+	<template name="test">
+		<scalar name="hostname"		oid="iso.3.6.1.2.1.1.5.0" interval="5"/>
+		<scalar name="uptime"		oid="iso.3.6.1.2.1.1.3.0" interval="5"/>
+		<scalar name="stub"			oid="iso.3.6.1.2.1.1.333.0" interval="5"/>
+		<tree  name="system"		oid="iso.3.6.1.2.1.1"/>
+	</template>
+	
+	<template name="pass">
+		<scalar name="integer01"		oid="iso.3.6.1.3.1997.1.0"/>
+		<scalar name="integer02"		oid="iso.3.6.1.3.1997.2.0"/>
+		<scalar name="integer03"		oid="iso.3.6.1.3.1997.3.0"/>
+		<scalar name="integer04"		oid="iso.3.6.1.3.1997.4.0"/>
+		<scalar name="integer05"		oid="iso.3.6.1.3.1997.5.0"/>
+		<scalar name="string01"			oid="iso.3.6.1.3.1997.6.0"/>
+		<scalar name="string02"			oid="iso.3.6.1.3.1997.7.0"/>
+		<scalar name="string03"			oid="iso.3.6.1.3.1997.8.0"/>
+		<scalar name="string04"			oid="iso.3.6.1.3.1997.9.0"/>
+		<scalar name="string05"			oid="iso.3.6.1.3.1997.10.0"/>		
+		<scalar name="ip01"				oid="iso.3.6.1.3.1997.11.0"/>
+		
+		<table	name="integers"			oid=".1.3.6.1.3.1997.128"/>
+		<table	name="strings"			oid=".1.3.6.1.3.1997.256"/>
+		<table	name="mixed"			oid=".1.3.6.1.3.1997.512"/>
+		<table	name="qos"					oid=".1.3.6.1.3.1997.768">
+			<column name="name"				oid=".1.3.6.1.3.1997.768.1.1"/>
+			<column name="bandwidth"		oid=".1.3.6.1.3.1997.768.1.2"/>
+			<column name="address"			oid=".1.3.6.1.3.1997.768.1.3"/>
+		</table>
+	
+		<tree	name="pass-tree"			oid=".1.3.6.1.3.1997"/>
+	</template>
+	
+	<template name="uptime">
+		<scalar name="uptime01"			oid="iso.3.6.1.2.1.1.3.0" interval="1"/>
+		<scalar name="uptime02"			oid="iso.3.6.1.2.1.1.3.0" interval="2"/>
+		<scalar name="uptime05"			oid="iso.3.6.1.2.1.1.3.0" interval="5"/>
+		<scalar name="uptime10"			oid="iso.3.6.1.2.1.1.3.0" interval="10"/>
+		<scalar name="uptime15"			oid="iso.3.6.1.2.1.1.3.0" interval="15"/>
+		<scalar name="uptime30"			oid="iso.3.6.1.2.1.1.3.0" interval="30"/>
+		<scalar name="uptime60"			oid="iso.3.6.1.2.1.1.3.0" interval="60"/>	
+	</template>
+	
+	<!--
+	<device name="virtsnmp20">
+		<snmp peername="192.168.56.220" version="2c" community="public"/>
+		
+		<objects>
+			<scalar name="hostname"		oid="iso.3.6.1.2.1.1.5.0" interval="5"/>
+			<reuse name="demo" prefix="true"/>
+			<reuse name="uptime"/>
+		</objects>		
+	</device>
+
+	<device name="virtsnmp21">
+		<snmp peername="192.168.56.221" version="2c" community="public"/>
+		
+		<objects>
+			<reuse name="demo"/>
+		</objects>		
+	</device>
+	-->
+	<device name="virtsnmp11">
+		<snmp peername="192.168.56.221" version="1" community="public"/>		
+		<objects>
+			<reuse name="demo"/>
+			<reuse name="uptime"/>
+		</objects>		
+	</device>
+	
+	<device name="virtsnmp20">
+		<snmp peername="192.168.56.220" version="2c" community="public"/>
+		
+		<objects>
+			<scalar name="hostname"		oid="iso.3.6.1.2.1.1.5.0" interval="5"/>
+			<reuse name="demo" prefix="true"/>
+			<reuse name="uptime"/>
+		</objects>		
+	</device>
+	<device name="virtsnmp20wrong">
+		<snmp peername="192.168.56.220" version="2c" community="wrong"/>
+		
+		<objects>
+			<scalar name="hostname"		oid="iso.3.6.1.2.1.1.5.0" interval="5"/>
+			<reuse name="demo" prefix="true"/>
+			<reuse name="uptime"/>
+		</objects>		
+	</device>
+	
+	<device name="virtsnmp22">
+		<snmp peername="192.168.56.222" version="2c" community="private"/>		
+		<objects>
+			<reuse name="pass"/>
+			<reuse name="test"/>
+		</objects>		
+	</device>
+	
+	<device name="virtsnmp30wrong">
+		<snmp peername="192.168.56.230" version="3" username="wrong" securityLevel="authPriv"
+		authPassphrase="authpass" authAlgorithm="SHA" privPassphrase="privpass" privAlgorithm="AES"/>
+		<objects>
+			<reuse name="test"/>
+		</objects>		
+	</device>
+	
+	<device name="virtsnmp30">
+		<snmp peername="192.168.56.230" version="3" username="admin" securityLevel="authPriv"
+		authPassphrase="authpass" authAlgorithm="SHA" privPassphrase="privpass" privAlgorithm="AES"/>
+		<objects>
+			<reuse name="test"/>
+		</objects>		
+	</device>
+	
+	<device name="virtsnmp31">
+		<snmp peername="192.168.56.231" version="3" username="admin" securityLevel="authPriv"
+		authPassphrase="authpass" authAlgorithm="SHA" privPassphrase="privpass" privAlgorithm="AES"/>
+		<objects>
+			<reuse name="test"/>
+		</objects>		
+	</device>
+	<device name="virtsnmp31B">
+		<snmp peername="192.168.56.231" version="3" username="admin" securityLevel="authPriv"
+		authPassphrase="authpass" authAlgorithm="SHA" privPassphrase="privpass" privAlgorithm="AES"/>
+		<objects>
+			<reuse name="test"/>
+		</objects>		
+	</device>
+	
+	<device name="virtsnmp32">
+		<snmp peername="192.168.56.232" version="3" username="admin" securityLevel="authPriv"
+		authPassphrase="authpass" authAlgorithm="SHA" privPassphrase="privpass" privAlgorithm="AES"/>
+		<objects>
+			<reuse name="pass"/>
+			<reuse name="test"/>
+		</objects>		
+	</device>
+	
+	<!--
+	<device name="switch0">
+		<snmp peername="192.168.2.3" version="2c" community="public"/>
+		
+		<objects>
+			<reuse name="demo"/>			
+		</objects>		
+	</device>
+
+	<device name="tables" interval="10">
+		<snmp peername="192.168.56.222" version="2c" community="public"/>
+		
+		<objects>
+			<scalar name="hostname"		oid="iso.3.6.1.2.1.1.5.0"/>
+			
+			<table name="atTable"		oid="iso.3.6.1.2.1.3.1" interval="5"/>
+			<table name="interfaces"	oid="iso.3.6.1.2.1.2.2"/>
+			
+			<reuse name="pass"/>
+		</objects>		
+	</device>
+	-->
+	<!--
+	<device name="virtsnmp01">
+		<snmp peername="192.168.56.201" version="2c" community="public"/>
+		
+		<objects>
+			<tree  name="system"	oid="iso.3.6.1.2.1.1"/>
+			<tree  name="system"	oid="iso.3.6.1.2.1.1" placeholder="true"/>
+			<scalar name="test0"		oid="iso.3.6.1.2.1.1.5.0"/>
+			<scalar name="test1"		oid="iso.3.6.1.2.1.1.5.0"/>
+		</objects>		
+	</device>
+	-->
+	
+	
+	<!--
+	<device name="virtsnmp01">
+		<snmp peername="192.168.56.201" version="2c" community="public"/>
+		
+		<objects>
+			<reuse name="demo"/>
+		</objects>		
+	</device>
+	-->
+	
+	<!--
+	<device name="virtsnmp02">
+		<snmp peername="192.168.56.202" version="3" username="admin" securityLevel="authPriv" authPassphrase="123456789" authAlgorithm="SHA" privPassphrase="987654321" privAlgorithm="DES"/>
+		
+		<objects>
+			<reuse name="small"/>
+		</objects>		
+	</device>
+	
+		
+	<device name="virtsnmp03">
+		<snmp peername="192.168.56.203" version="2c" community="public"/>
+		
+		<objects>
+			<tree  name="/"			oid="iso"/>
+		</objects>		
+	</device>
+	-->
+	
+	<!--
+	<device name="virtsnmp04">
+		<snmp peername="192.168.56.204" version="2c" community="public"/>
+		
+		<objects>
+			<tree  name="experimental"	oid="iso.3.6.1.3.1997"/>
+			
+			<scalar name="object0"		oid="iso.3.6.1.3.1997.1.0" interval="5000"/>
+			<scalar name="object1"		oid="iso.3.6.1.3.1997.2.0" interval="5000"/>
+			<scalar name="object2"		oid="iso.3.6.1.3.1997.3.0" interval="5000"/>
+			<scalar name="object3"		oid="iso.3.6.1.3.1997.4.0" interval="5000"/>
+			<scalar name="object4"		oid="iso.3.6.1.3.1997.5.0" interval="5000"/>
+			<scalar name="object5"		oid="iso.3.6.1.3.1997.6.0" interval="5000"/>
+			<scalar name="object6"		oid="iso.3.6.1.3.1997.7.0" interval="5000"/>
+			<scalar name="object7"		oid="iso.3.6.1.3.1997.8.0" interval="5000"/>			
+			
+			<table  name="table0"		oid="iso.3.6.1.3.1997.256" interval="5000"/>
+			<table  name="table1"		oid="iso.3.6.1.3.1997.512" interval="5000"/>
+			<scalar name="object0"		oid="iso.3.6.1.3.1997.1.0" interval="5000"/>
+			<table  name="table2"		oid="iso.3.6.1.3.1997.1024"interval="5000"/>
+		</objects>		
+	</device>
+	-->
+	
+</snmpfs>

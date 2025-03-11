@@ -1,0 +1,46 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE snmpfs SYSTEM "snmpfs.dtd">
+
+<snmpfs>
+
+    <trap port="16200" version="v2c" community="public"/>
+
+    <mibs >
+      <!-- Differ between MIB file and MIB name ? -->
+      <mib path="HP_ENTERPRISE"/>
+    </mibs>  
+
+  <device name="ubuntu">
+    <!-- if this line is missing, maybe offline mode is enabled where tree is filled with MIB information -->
+    <snmp peername="192.168.56.107" version="v2c" community="public"/>
+    
+    <objects>
+     <scalar name="uptime" oid="XXXXXXX"/>
+     <scalar name="uptime" oid="XXXXXXX"/>
+     <scalar name="uptime" oid="XXXXXXX"/>
+     <scalar name="uptime" oid="XXXXXXX"/>
+
+      <table name="ifTable" oid="XXXXXXX"/>
+      <table name="ifTable" oid="XXXXXXX"/>
+      <table name="ifTable" oid="XXXXXXX"/>
+      <table name="ifTable" oid="XXXXXXX">
+        <column name="address" oid="XXXXXXX"/>
+        <column name="X01" oid="XXXXXXX"/>
+        <column name="X02" oid="XXXXXXX"/>
+        <column name="X03" oid="XXXXXXX"/>
+        <column name="X04" oid="XXXXXXX"/>
+      </table>
+      <tree name="sysinfo" oid="XXXXX" />
+      <tree name="sysinfo" oid="XXXXX" />
+    </objects>
+  </device>
+  
+  <device name="procurve">
+    <objects>
+      <scalar name="uptime" oid="XXXXXXX"/>
+      <scalar name="X05" oid="sysDescr"/>    
+    </objects>
+  </device>
+
+
+</snmpfs>
